@@ -66,7 +66,6 @@ if [ -x "/usr/bin/apt" ]; then
 elif [ -x "/usr/bin/yum" ]; then
     sudo yum clean all > /dev/null 2>&1
 fi
-echo -e "${GREEN} mUniAgent和HostGuard已经成功卸载！...${NC}"
 
 echo -e "${YELLOW}[2/7] 安装编译工具和依赖...${NC}"
 export DEBIAN_FRONTEND=noninteractive
