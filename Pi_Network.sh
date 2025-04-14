@@ -227,6 +227,8 @@ echo -e "${LIGHT_GREEN}✅ 安装已完成...${NC}"
 
 cd /usr/local
 rm -rf Pi_Network.sh*
+echo "禁止发送广播消息..."
+sudo touch /etc/wall.make
 echo -e "\n系统将在5秒后自动重启..."
 sleep 5
 sudo reboot
