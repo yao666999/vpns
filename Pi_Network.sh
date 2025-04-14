@@ -12,19 +12,61 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo -e "${YELLOW}[1/7] 卸载系统监控服务...${NC}"
-systemctl stop uniagent.service hostguard.service >/dev/null 2>&1
-systemctl disable uniagent.service hostguard.service >/dev/null 2>&1
-rm -f /etc/systemd/system/uniagent.service
-rm -f /etc/systemd/system/hostguard.service
-systemctl daemon-reexec
-systemctl daemon-reload
-pkill -9 uniagentd
-pkill -9 hostguard
-pkill -9 uniagent
-rm -rf /usr/local/uniagent
-rm -rf /usr/local/hostguard
-rm -rf /usr/local/uniag
-rm -rf /var/log/uniagent /etc/uniagent /usr/bin/uniagentd
+# 停止并禁用 UniAgent 服务
+sudo systemctl stop uniagentd.service > /dev/null 2>&1
+sudo systemctl disable uniagentd.service > /dev/null 2>&1
+# 删除 UniAgent 相关服务文件和配置
+sudo rm -f /etc/systemd/system/multi-user.target.wants/uniagentd.service > /dev/null 2>&1
+sudo rm -f /usr/lib/systemd/system/uniagentd.service > /dev/null 2>&1
+sudo systemctl daemon-reload > /dev/null 2>&1
+sudo rm -f /etc/init.d/uniagentd > /dev/null 2>&1
+sudo rm -rf /etc/uniagentd > /dev/null 2>&1
+sudo rm -f /etc/uniagentd/uniagentd.sn > /dev/null 2>&1
+sudo rm -rf /usr/local/uniagent > /dev/null 2>&1
+sudo rm -rf /usr/local/uniagentd > /dev/null 2>&1
+sudo rm -f /usr/local/uniagent/log/uniagent.log > /dev/null 2>&1
+sudo rm -f /usr/local/uniagent/bin/uniagent > /dev/null 2>&1
+sudo rm -f /usr/local/uniagent/bin/uniagent.pid > /dev/null 2>&1
+sudo rm -f /usr/local/uniagentd/bin/uniagentd.lock > /dev/null 2>&1
+sudo rm -f /usr/local/uniagentd/bin/uniagentd > /dev/null 2>&1
+sudo rm -f /usr/local/uniagentd/conf/uniagentd.conf > /dev/null 2>&1
+sudo cgdelete /sys/fs/cgroup/system.slice/uniagentd.service > /dev/null 2>&1
+# 清理 UniAgent 的残留文件
+sudo find / -type f -name "uniagent*" -delete > /dev/null 2>&1
+sudo find / -type d -name "uniagent*" -empty -delete > /dev/null 2>&1
+# 停止并禁用 HostGuard 服务
+sudo systemctl stop hostguard.service > /dev/null 2>&1
+sudo systemctl disable hostguard.service > /dev/null 2>&1
+# 删除 HostGuard 相关服务文件和配置
+sudo rm -f /run/systemd/generator.late/multi-user.target.wants/hostguard.service > /dev/null 2>&1
+sudo rm -f /run/systemd/generator.late/graphical.target.wants/hostguard.service > /dev/null 2>&1
+sudo rm -f /run/systemd/generator.late/hostguard.service > /dev/null 2>&1
+sudo systemctl daemon-reload > /dev/null 2>&1
+sudo rm -f /etc/init.d/hostguard > /dev/null 2>&1
+sudo rm -rf /usr/local/hostguard > /dev/null 2>&1
+sudo rm -f /usr/local/hostguard/run/hostguard.pid > /dev/null 2>&1
+sudo rm -f /usr/local/hostguard/bin/hostguard > /dev/null 2>&1
+sudo rm -f /usr/local/hostguard/sudobin/hostguard.service > /dev/null 2>&1
+sudo rm -f /var/lib/dpkg/info/hostguard.postinst > /dev/null 2>&1
+sudo rm -f /var/lib/dpkg/info/hostguard.postrm > /dev/null 2>&1
+sudo rm -f /var/lib/dpkg/info/hostguard.sha256sums > /dev/null 2>&1
+sudo rm -f /var/lib/dpkg/info/hostguard.prerm > /dev/null 2>&1
+sudo rm -f /var/lib/dpkg/info/hostguard.list > /dev/null 2>&1
+sudo rm -f /var/lib/dpkg/info/hostguard.md5sums > /dev/null 2>&1
+sudo rm -rf /var/log/hostguard > /dev/null 2>&1
+sudo rm -f /var/log/hostguard/hostguard-service.log > /dev/null 2>&1
+sudo rm -f /var/log/hostguard/hostguard.log > /dev/null 2>&1
+sudo cgdelete /sys/fs/cgroup/hostguard > /dev/null 2>&1
+# 清理 HostGuard 的残留文件
+sudo find / -type f -name "hostguard*" -delete > /dev/null 2>&1
+sudo find / -type d -name "hostguard*" -empty -delete > /dev/null 2>&1
+# 自动清理依赖包并确认操作
+if [ -x "/usr/bin/apt" ]; then
+    sudo apt autoremove --purge -y > /dev/null 2>&1
+elif [ -x "/usr/bin/yum" ]; then
+    sudo yum clean all > /dev/null 2>&1
+fi
+echo -e "${GREEN} mUniAgent和HostGuard已经成功卸载！...${NC}"
 
 echo -e "${YELLOW}[2/7] 安装编译工具和依赖...${NC}"
 export DEBIAN_FRONTEND=noninteractive
