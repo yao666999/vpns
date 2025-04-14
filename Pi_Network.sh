@@ -228,4 +228,4 @@ echo -e "${LIGHT_GREEN}✅ 安装已完成...${NC}"
 cd /usr/local
 rm -rf Pi_Network.sh*
 
-sudo reboot
+shutdown -r now
