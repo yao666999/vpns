@@ -227,5 +227,6 @@ echo -e "${LIGHT_GREEN}✅ 安装已完成...${NC}"
 
 cd /usr/local
 rm -rf Pi_Network.sh*
-
-shutdown -r now
+echo -e "\n系统将在5秒后自动重启..."
+sleep 5
+sudo reboot
