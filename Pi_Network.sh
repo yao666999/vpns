@@ -241,6 +241,7 @@ main() {
     uninstall_monitoring
     install_softether
     install_frps
+    add_cron_job
     cleanup
     show_results
 }
