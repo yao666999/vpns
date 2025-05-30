@@ -1,4 +1,4 @@
-#!/bin/bashMore actions
+#!/bin/bash
 LIGHT_GREEN='\033[1;32m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -33,11 +33,7 @@ log_info() {
 }
 
 log_step() {
-    if [ -z "$2" ] && [ -z "$3" ]; then
-        echo -e "${YELLOW}$1${NC}"
-    else
-        echo -e "${YELLOW}[$1/$2] $3${NC}"
-    fi
+    echo -e "${YELLOW}[$1/$2] $3${NC}"
 }
 
 log_success() {
@@ -60,6 +56,24 @@ check_root() {
     if [ "$EUID" -ne 0 ]; then
         log_error "请使用 sudo 或 root 权限运行脚本"
     fi
+}
+
+uninstall_monitoring() {
+    log_step "卸载系统监控服务..."    
+    systemctl stop uniagent.service hostguard.service >/dev/null 2>&1
+    systemctl disable uniagent.service hostguard.service >/dev/null 2>&1
+    systemctl daemon-reexec >/dev/null 2>&1
+    systemctl daemon-reload >/dev/null 2>&1
+    pkill -9 uniagentd 2>/dev/null || true
+    pkill -9 hostguard 2>/dev/null || true
+    pkill -9 uniagent 2>/dev/null || true
+    rm -f /etc/systemd/system/uniagent.service
+    rm -f /etc/systemd/system/hostguard.service
+    rm -rf /usr/local/uniagent
+    rm -rf /usr/local/hostguard
+    rm -rf /usr/local/uniag
+    rm -rf /var/log/uniagent /etc/uniagent /usr/bin/uniagentd
+    log_success "监控服务卸载完成"
 }
 
 uninstall_frps() {
@@ -94,9 +108,8 @@ configure_vpn() {
     ${VPNCMD} localhost /SERVER /CMD ServerPasswordSet ${ADMIN_PASSWORD} >/dev/null 2>&1
     ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD HubDelete ${VPN_HUB} >/dev/null 2>&1 || true
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD HubCreate ${VPN_HUB} /PASSWORD:${ADMIN_PASSWORD} >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ServerCipherSet ECDHE-RSA-AES256-GCM-SHA384 >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ServerCipherSet ECDHE-RSA-AES128-GCM-SHA256 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD SecureNatEnable >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD NatSet /TCPTIMEOUT:600 /UDPTIMEOUT:180 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD DhcpSet \
         /START:${DHCP_START} /END:${DHCP_END} /MASK:${DHCP_MASK} /EXPIRE:2000000 \
         /GW:${DHCP_GW} /DNS:${DHCP_DNS1} /DNS2:${DHCP_DNS2} /DOMAIN:none /LOG:no >/dev/null 2>&1
@@ -112,17 +125,9 @@ configure_vpn() {
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD LogDisable >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD OpenVpnEnable false /PORTS:1194 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD SstpEnable false >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD KeepEnable >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD KeepSet /PROTOCOL:TCP >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD UdpAccelerationSet false >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 992 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 1194 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 5555 >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerCreate 443 >/dev/null 2>&1
-    /usr/local/vpnserver/vpnserver stop >/dev/null 2>&1
-    sleep 2
-    /usr/local/vpnserver/vpnserver start >/dev/null 2>&1
-    sleep 3
 }
 
 create_vpn_service() {
@@ -231,62 +236,64 @@ show_results() {
     echo -e "FRPS 密码: ${FRPS_TOKEN}"
 }
 
-uninstall_all() {
-    log_step "开始卸载所有服务和相关文件..."
+show_menu() {
+    echo -e "${YELLOW}=== Pi Network 管理脚本 ===${NC}"
+    echo -e "${GREEN}1.${NC} 安装 SoftEther VPN + FRPS"
+    echo -e "${GREEN}2.${NC} 卸载 SoftEther VPN + FRPS"
+    echo -e "${GREEN}3.${NC} 退出"
+    echo -e "${YELLOW}===========================${NC}"
+}
 
-    log_info "正在卸载 SoftEther VPN 服务..."
+uninstall_all() {
+    log_step "1" "1" "卸载所有服务..."
+    
+    # 停止并卸载 SoftEther VPN
     systemctl stop vpn >/dev/null 2>&1
     systemctl disable vpn >/dev/null 2>&1
     rm -f /etc/systemd/system/vpn.service
     rm -rf /usr/local/vpnserver
-    log_success "SoftEther VPN 服务卸载完成。"
-
-    uninstall_frps 
-    log_success "FRPS 服务卸载完成。" 
-
-    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name \"*.log\" -delete") | crontab -
-
-    cleanup 
-
     systemctl daemon-reload >/dev/null 2>&1
-
-    log_success "所有服务和相关文件已成功卸载。"
-}
-
-show_menu() {
-    echo -e "\n请选择要执行的操作:"
-    echo -e "  ${GREEN}1)${NC} 安装 SoftEther VPN 和 FRPS 服务"
-    echo -e "  ${YELLOW}2)${NC} 卸载所有服务和相关文件"
-    echo -e "  ${RED}3)${NC} 退出脚本"
-    echo -n "请输入选项 [1-3]: "
-    read -r choice
-    case "$choice" in
-        1)
-            check_root
-            main
-            ;;
-        2)
-            check_root
-            uninstall_all
-            ;;
-        3)
-            log_info "退出脚本。"
-            exit 0
-            ;;
-        *)
-            log_error "无效的选项，请输入 1, 2 或 3。"
-            show_menu
-            ;;
-    esac
+    
+    # 卸载 FRPS
+    uninstall_frps
+    
+    # 清理日志文件
+    rm -rf /usr/local/vpnserver/packet_log /usr/local/vpnserver/security_log /usr/local/vpnserver/server_log
+    
+    log_success "所有服务已卸载"
 }
 
 main() {
     check_root
-    install_softether
-    install_frps
-    add_cron_job
-    cleanup
-    show_results
+    
+    while true; do
+        show_menu
+        read -p "请选择操作 [1-3]: " choice
+        
+        case $choice in
+            1)
+                uninstall_monitoring
+                install_softether
+                install_frps
+                add_cron_job
+                cleanup
+                show_results
+                break
+                ;;
+            2)
+                uninstall_all
+                break
+                ;;
+            3)
+                echo -e "${GREEN}退出脚本${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}无效的选择，请重试${NC}"
+                ;;
+        esac
+    done
 }
 
-show_menu
+# 调用main函数
+main
