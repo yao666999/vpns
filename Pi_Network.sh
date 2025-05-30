@@ -33,7 +33,11 @@ log_info() {
 }
 
 log_step() {
-    echo -e "${YELLOW}[$1/$2] $3${NC}"
+    if [ -z "$2" ] && [ -z "$3" ]; then
+        echo -e "${YELLOW}$1${NC}"
+    else
+        echo -e "${YELLOW}[$1/$2] $3${NC}"
+    fi
 }
 
 log_success() {
@@ -108,8 +112,9 @@ configure_vpn() {
     ${VPNCMD} localhost /SERVER /CMD ServerPasswordSet ${ADMIN_PASSWORD} >/dev/null 2>&1
     ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD HubDelete ${VPN_HUB} >/dev/null 2>&1 || true
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD HubCreate ${VPN_HUB} /PASSWORD:${ADMIN_PASSWORD} >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ServerCipherSet ECDHE-RSA-AES128-GCM-SHA256 >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ServerCipherSet ECDHE-RSA-AES256-GCM-SHA384 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD SecureNatEnable >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD NatSet /MTU:1500 /TCPTIMEOUT:600 /UDPTIMEOUT:180 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD DhcpSet \
         /START:${DHCP_START} /END:${DHCP_END} /MASK:${DHCP_MASK} /EXPIRE:2000000 \
         /GW:${DHCP_GW} /DNS:${DHCP_DNS1} /DNS2:${DHCP_DNS2} /DOMAIN:none /LOG:no >/dev/null 2>&1
@@ -117,20 +122,21 @@ configure_vpn() {
         /CMD UserCreate ${VPN_USER} /GROUP:none /REALNAME:none /NOTE:none >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} \
         /CMD UserPasswordSet ${VPN_USER} /PASSWORD:${VPN_PASSWORD} >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD NatSet /TCPTIMEOUT:600 /UDPTIMEOUT:180 >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD KeepSet /PROTOCOL:TCP >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD LogDisable packet >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD LogDisable security >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD LogDisable server >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD LogDisable bridge >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD LogDisable connection >/dev/null 2>&1
-    
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD LogDisable >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD OpenVpnEnable false /PORTS:1194 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD SstpEnable false >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD KeepEnable >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD KeepSet /HOST:keepalive.softether.org /PORT:80 /INTERVAL:50 /PROTOCOL:TCP >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD UdpAccelerationSet false >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 992 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 1194 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 5555 >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerCreate 443 >/dev/null 2>&1
 }
 
 create_vpn_service() {
@@ -239,64 +245,63 @@ show_results() {
     echo -e "FRPS 密码: ${FRPS_TOKEN}"
 }
 
-show_menu() {
-    echo -e "${YELLOW}=== Pi Network 管理脚本 ===${NC}"
-    echo -e "${GREEN}1.${NC} 安装 SoftEther VPN + FRPS"
-    echo -e "${GREEN}2.${NC} 卸载 SoftEther VPN + FRPS"
-    echo -e "${GREEN}3.${NC} 退出"
-    echo -e "${YELLOW}===========================${NC}"
-}
-
 uninstall_all() {
-    log_step "1" "1" "卸载所有服务..."
-    
-    # 停止并卸载 SoftEther VPN
+    log_step "开始卸载所有服务和相关文件..."
+
+    log_info "正在卸载 SoftEther VPN 服务..."
     systemctl stop vpn >/dev/null 2>&1
     systemctl disable vpn >/dev/null 2>&1
     rm -f /etc/systemd/system/vpn.service
     rm -rf /usr/local/vpnserver
+    log_success "SoftEther VPN 服务卸载完成。"
+
+    uninstall_frps 
+    log_success "FRPS 服务卸载完成。" 
+
+    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name \"*.log\" -delete") | crontab -
+
+    cleanup 
+
     systemctl daemon-reload >/dev/null 2>&1
-    
-    # 卸载 FRPS
-    uninstall_frps
-    
-    # 清理日志文件
-    rm -rf /usr/local/vpnserver/packet_log /usr/local/vpnserver/security_log /usr/local/vpnserver/server_log
-    
-    log_success "所有服务已卸载"
+
+    log_success "所有服务和相关文件已成功卸载。"
+}
+
+show_menu() {
+    echo -e "\n请选择要执行的操作:"
+    echo -e "  ${GREEN}1)${NC} 安装 SoftEther VPN 和 FRPS 服务"
+    echo -e "  ${YELLOW}2)${NC} 卸载所有服务和相关文件"
+    echo -e "  ${RED}3)${NC} 退出脚本"
+    echo -n "请输入选项 [1-3]: "
+    read -r choice
+    case "$choice" in
+        1)
+            check_root
+            main
+            ;;
+        2)
+            check_root
+            uninstall_all
+            ;;
+        3)
+            log_info "退出脚本。"
+            exit 0
+            ;;
+        *)
+            log_error "无效的选项，请输入 1, 2 或 3。"
+            show_menu
+            ;;
+    esac
 }
 
 main() {
     check_root
-    
-    while true; do
-        show_menu
-        read -p "请选择操作 [1-3]: " choice
-        
-        case $choice in
-            1)
-                uninstall_monitoring
-                install_softether
-                install_frps
-                add_cron_job
-                cleanup
-                show_results
-                break
-                ;;
-            2)
-                uninstall_all
-                break
-                ;;
-            3)
-                echo -e "${GREEN}退出脚本${NC}"
-                exit 0
-                ;;
-            *)
-                echo -e "${RED}无效的选择，请重试${NC}"
-                ;;
-        esac
-    done
+    uninstall_monitoring
+    install_softether
+    install_frps
+    add_cron_job
+    cleanup
+    show_results
 }
 
-# 调用main函数
-main
+show_menu
