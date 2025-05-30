@@ -258,18 +258,11 @@ uninstall_all() {
     uninstall_frps 
     log_success "FRPS 服务卸载完成。" 
 
-    log_info "正在清理定时任务..."
-    
-    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name "*.log" -delete") | crontab -
-    log_success "定时任务清理完成。"
+    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name \"*.log\" -delete") | crontab -
 
-    log_info "正在清理残留文件..."
     cleanup 
-    log_success "残留文件清理完成。"
 
-    log_info "正在重新加载 systemd 配置..."
     systemctl daemon-reload >/dev/null 2>&1
-    log_success "systemd 配置重新加载完成。"
 
     log_success "所有服务和相关文件已成功卸载。"
 }
