@@ -119,6 +119,10 @@ configure_vpn() {
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 1194 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 5555 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerCreate 443 >/dev/null 2>&1
+    /usr/local/vpnserver/vpnserver stop >/dev/null 2>&1
+    sleep 2
+    /usr/local/vpnserver/vpnserver start >/dev/null 2>&1
+    sleep 3
 }
 
 create_vpn_service() {
@@ -229,23 +233,15 @@ show_results() {
 
 uninstall_all() {
     log_step "开始卸载所有服务和相关文件..."
-
     log_info "正在卸载 SoftEther VPN 服务..."
     systemctl stop vpn >/dev/null 2>&1
     systemctl disable vpn >/dev/null 2>&1
     rm -f /etc/systemd/system/vpn.service
     rm -rf /usr/local/vpnserver
     log_success "SoftEther VPN 服务卸载完成。"
-
     uninstall_frps 
     log_success "FRPS 服务卸载完成。" 
-
-    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name \"*.log\" -delete") | crontab -
-
-    cleanup 
-
     systemctl daemon-reload >/dev/null 2>&1
-
     log_success "所有服务和相关文件已成功卸载。"
 }
 
@@ -284,5 +280,4 @@ main() {
     cleanup
     show_results
 }
-
 show_menu
