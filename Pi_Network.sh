@@ -33,7 +33,11 @@ log_info() {
 }
 
 log_step() {
-    echo -e "${YELLOW}[$1/$2] $3${NC}"
+    if [ -z "$2" ]; then
+        echo -e "${YELLOW}[$1]${NC}"
+    else
+        echo -e "${YELLOW}[$1/$2] $3${NC}"
+    fi
 }
 
 log_success() {
@@ -247,16 +251,16 @@ uninstall_all() {
     rm -rf /usr/local/vpnserver
     log_success "SoftEther VPN 服务卸载完成。"
 
-    uninstall_frps # 调用已有的FRPS卸载函数
-    log_success "FRPS 服务卸载完成。" # uninstall_frps 内部已有日志，此处作为补充
+    uninstall_frps 
+    log_success "FRPS 服务卸载完成。" 
 
     log_info "正在清理定时任务..."
-    # 从crontab中移除包含特定命令的行
-    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name \\"*.log\\" -delete") | crontab -
+    
+    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name "*.log" -delete") | crontab -
     log_success "定时任务清理完成。"
 
     log_info "正在清理残留文件..."
-    cleanup # 调用已有的清理函数
+    cleanup 
     log_success "残留文件清理完成。"
 
     log_info "正在重新加载 systemd 配置..."
@@ -302,7 +306,5 @@ main() {
     cleanup
     show_results
 }
-
-# 调用main函数
 
 show_menu
