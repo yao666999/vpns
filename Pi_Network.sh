@@ -33,8 +33,8 @@ log_info() {
 }
 
 log_step() {
-    if [ -z "$2" ]; then
-        echo -e "${YELLOW}[$1]${NC}"
+    if [ -z "$2" ] && [ -z "$3" ]; then
+        echo -e "${YELLOW}$1${NC}"
     else
         echo -e "${YELLOW}[$1/$2] $3${NC}"
     fi
