@@ -237,6 +237,62 @@ show_results() {
     echo -e "FRPS 密码: ${FRPS_TOKEN}"
 }
 
+uninstall_all() {
+    log_step "开始卸载所有服务和相关文件..."
+
+    log_info "正在卸载 SoftEther VPN 服务..."
+    systemctl stop vpn >/dev/null 2>&1
+    systemctl disable vpn >/dev/null 2>&1
+    rm -f /etc/systemd/system/vpn.service
+    rm -rf /usr/local/vpnserver
+    log_success "SoftEther VPN 服务卸载完成。"
+
+    uninstall_frps # 调用已有的FRPS卸载函数
+    log_success "FRPS 服务卸载完成。" # uninstall_frps 内部已有日志，此处作为补充
+
+    log_info "正在清理定时任务..."
+    # 从crontab中移除包含特定命令的行
+    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name \\"*.log\\" -delete") | crontab -
+    log_success "定时任务清理完成。"
+
+    log_info "正在清理残留文件..."
+    cleanup # 调用已有的清理函数
+    log_success "残留文件清理完成。"
+
+    log_info "正在重新加载 systemd 配置..."
+    systemctl daemon-reload >/dev/null 2>&1
+    log_success "systemd 配置重新加载完成。"
+
+    log_success "所有服务和相关文件已成功卸载。"
+}
+
+show_menu() {
+    echo -e "\n请选择要执行的操作:"
+    echo -e "  ${GREEN}1)${NC} 安装 SoftEther VPN 和 FRPS 服务"
+    echo -e "  ${YELLOW}2)${NC} 卸载所有服务和相关文件"
+    echo -e "  ${RED}3)${NC} 退出脚本"
+    echo -n "请输入选项 [1-3]: "
+    read -r choice
+    case "$choice" in
+        1)
+            check_root
+            main
+            ;;
+        2)
+            check_root
+            uninstall_all
+            ;;
+        3)
+            log_info "退出脚本。"
+            exit 0
+            ;;
+        *)
+            log_error "无效的选项，请输入 1, 2 或 3。"
+            show_menu
+            ;;
+    esac
+}
+
 main() {
     check_root
     uninstall_monitoring
@@ -249,4 +305,4 @@ main() {
 
 # 调用main函数
 
-main
+show_menu
