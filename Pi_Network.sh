@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bashMore actions
 LIGHT_GREEN='\033[1;32m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -94,8 +94,9 @@ configure_vpn() {
     ${VPNCMD} localhost /SERVER /CMD ServerPasswordSet ${ADMIN_PASSWORD} >/dev/null 2>&1
     ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD HubDelete ${VPN_HUB} >/dev/null 2>&1 || true
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD HubCreate ${VPN_HUB} /PASSWORD:${ADMIN_PASSWORD} >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ServerCipherSet ECDHE-RSA-AES128-GCM-SHA256 >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ServerCipherSet ECDHE-RSA-AES256-GCM-SHA384 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD SecureNatEnable >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD NatSet /TCPTIMEOUT:600 /UDPTIMEOUT:180 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD DhcpSet \
         /START:${DHCP_START} /END:${DHCP_END} /MASK:${DHCP_MASK} /EXPIRE:2000000 \
         /GW:${DHCP_GW} /DNS:${DHCP_DNS1} /DNS2:${DHCP_DNS2} /DOMAIN:none /LOG:no >/dev/null 2>&1
@@ -111,10 +112,17 @@ configure_vpn() {
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD LogDisable >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD OpenVpnEnable false /PORTS:1194 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD SstpEnable false >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD KeepEnable >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD KeepSet /PROTOCOL:TCP >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD UdpAccelerationSet false >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 992 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 1194 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerDelete 5555 >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ListenerCreate 443 >/dev/null 2>&1
+    /usr/local/vpnserver/vpnserver stop >/dev/null 2>&1
+    sleep 2
+    /usr/local/vpnserver/vpnserver start >/dev/null 2>&1
+    sleep 3
 }
 
 create_vpn_service() {
@@ -225,15 +233,23 @@ show_results() {
 
 uninstall_all() {
     log_step "开始卸载所有服务和相关文件..."
+
     log_info "正在卸载 SoftEther VPN 服务..."
     systemctl stop vpn >/dev/null 2>&1
     systemctl disable vpn >/dev/null 2>&1
     rm -f /etc/systemd/system/vpn.service
     rm -rf /usr/local/vpnserver
     log_success "SoftEther VPN 服务卸载完成。"
+
     uninstall_frps 
     log_success "FRPS 服务卸载完成。" 
+
+    (crontab -l 2>/dev/null | grep -v -F "find /usr/local -type f -name \"*.log\" -delete") | crontab -
+
+    cleanup 
+
     systemctl daemon-reload >/dev/null 2>&1
+
     log_success "所有服务和相关文件已成功卸载。"
 }
 
@@ -272,4 +288,5 @@ main() {
     cleanup
     show_results
 }
+
 show_menu
