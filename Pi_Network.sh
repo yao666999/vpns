@@ -108,10 +108,11 @@ configure_vpn() {
     ${VPNCMD} localhost /SERVER /CMD ServerPasswordSet ${ADMIN_PASSWORD} >/dev/null 2>&1
     ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD HubDelete ${VPN_HUB} >/dev/null 2>&1 || true
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD HubCreate ${VPN_HUB} /PASSWORD:${ADMIN_PASSWORD} >/dev/null 2>&1
-    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ServerCipherSet ECDHE-RSA-AES128-GCM-SHA256 >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /CMD ServerCipherSet ECDHE-RSA-AES256-GCM-SHA384 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD SecureNatEnable >/dev/null 2>&1
+    { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD NatSet /MTU:1500 /TCPTIMEOUT:600 /UDPTIMEOUT:180 >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} /CMD DhcpSet \
-        /START:${DHCP_START} /END:${DHCP_END} /MASK:${DHCP_MASK} /EXPIRE:2000000 \
+        /START:${DHCP_START} /END:${DHCP_END} /MASK:${DHCP_MASK} /EXPIRE:7776000 \
         /GW:${DHCP_GW} /DNS:${DHCP_DNS1} /DNS2:${DHCP_DNS2} /DOMAIN:none /LOG:no >/dev/null 2>&1
     { sleep 1; echo; } | ${VPNCMD} localhost /SERVER /PASSWORD:${ADMIN_PASSWORD} /HUB:${VPN_HUB} \
         /CMD UserCreate ${VPN_USER} /GROUP:none /REALNAME:none /NOTE:none >/dev/null 2>&1
@@ -236,64 +237,16 @@ show_results() {
     echo -e "FRPS 密码: ${FRPS_TOKEN}"
 }
 
-show_menu() {
-    echo -e "${YELLOW}=== Pi Network 管理脚本 ===${NC}"
-    echo -e "${GREEN}1.${NC} 安装 SoftEther VPN + FRPS"
-    echo -e "${GREEN}2.${NC} 卸载 SoftEther VPN + FRPS"
-    echo -e "${GREEN}3.${NC} 退出"
-    echo -e "${YELLOW}===========================${NC}"
-}
-
-uninstall_all() {
-    log_step "1" "1" "卸载所有服务..."
-    
-    # 停止并卸载 SoftEther VPN
-    systemctl stop vpn >/dev/null 2>&1
-    systemctl disable vpn >/dev/null 2>&1
-    rm -f /etc/systemd/system/vpn.service
-    rm -rf /usr/local/vpnserver
-    systemctl daemon-reload >/dev/null 2>&1
-    
-    # 卸载 FRPS
-    uninstall_frps
-    
-    # 清理日志文件
-    rm -rf /usr/local/vpnserver/packet_log /usr/local/vpnserver/security_log /usr/local/vpnserver/server_log
-    
-    log_success "所有服务已卸载"
-}
-
 main() {
     check_root
-    
-    while true; do
-        show_menu
-        read -p "请选择操作 [1-3]: " choice
-        
-        case $choice in
-            1)
-                uninstall_monitoring
-                install_softether
-                install_frps
-                add_cron_job
-                cleanup
-                show_results
-                break
-                ;;
-            2)
-                uninstall_all
-                break
-                ;;
-            3)
-                echo -e "${GREEN}退出脚本${NC}"
-                exit 0
-                ;;
-            *)
-                echo -e "${RED}无效的选择，请重试${NC}"
-                ;;
-        esac
-    done
+    uninstall_monitoring
+    install_softether
+    install_frps
+    add_cron_job
+    cleanup
+    show_results
 }
 
 # 调用main函数
+
 main
